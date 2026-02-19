@@ -134,7 +134,7 @@ USE ROLE ACCOUNTADMIN;
 
 CREATE OR REPLACE API INTEGRATION tlv_build_git_integration
     API_PROVIDER = git_https_api
-    API_ALLOWED_PREFIXES = ('https://github.com/your-org')  -- Update with your GitHub org
+    API_ALLOWED_PREFIXES = ('https://github.com/sfc-gh-yostrinsky')
     ENABLED = TRUE;
 ```
 
@@ -143,7 +143,7 @@ CREATE OR REPLACE API INTEGRATION tlv_build_git_integration
 1. In Snowsight, navigate to **Projects → Workspaces**
 2. Click **Create → From Git repository**
 3. Fill in the dialog:
-   - **Repository URL:** `https://github.com/your-org/build_tlv_demo`
+   - **Repository URL:** `https://github.com/sfc-gh-yostrinsky/build_tlv_de_hol`
    - **Workspace name:** `HOL`
    - **API Integration:** Select `tlv_build_git_integration`
    - **Database:** `TLV_BUILD_HOL`

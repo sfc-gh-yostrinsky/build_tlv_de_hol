@@ -39,7 +39,7 @@ CREATE WAREHOUSE IF NOT EXISTS TLV_DBT_WH
 
 -- Create the dbt project from workspace
 CREATE OR REPLACE DBT PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.DBT_ECOMMERCE
-    FROM 'snow://workspace/user$.DATA_ENG_DEMO."HOL"/versions/live/dbt_ecommerce'
+    FROM 'snow://workspace/user$.public.HOL/versions/live/dbt_ecommerce'
     COMMENT = 'Customer lifetime value model for e-commerce analytics';
 
 -- Verify deployment

@@ -41,7 +41,7 @@ CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION TLV_BUILD_HOL_PYPI_EAI
 
 -- Then create the Notebook Project from that workspace:
 CREATE OR REPLACE NOTEBOOK PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.product_analysis_project
-    FROM 'snow://workspace/user$.DATA_ENG_DEMO."HOL"/versions/live/notebooks'
+    FROM 'snow://workspace/user$.public.HOL/versions/live/notebooks'
     COMMENT = 'Product category analysis using Snowpark Connect';
 
 -- ============================================================================
@@ -50,8 +50,8 @@ CREATE OR REPLACE NOTEBOOK PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.product_analysis_
 -- Stages are better for automated deployments from Git/CI systems
 
 -- Create a stage for notebook files
-CREATE STAGE IF NOT EXISTS TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage
-    DIRECTORY = (ENABLE = TRUE);
+-- CREATE STAGE IF NOT EXISTS TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage
+--     DIRECTORY = (ENABLE = TRUE);
 
 -- Upload files to stage (run from terminal or use PUT):
 /*
@@ -65,12 +65,12 @@ PUT file:///path/to/requirements.txt @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage
 */
 
 -- Verify files are uploaded
-LIST @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage;
+-- LIST @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage;
 
 -- Create Notebook Project from stage
-CREATE OR REPLACE NOTEBOOK PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.product_analysis_project
-    FROM '@TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage'
-    COMMENT = 'Product category analysis using Snowpark Connect (SCOS)';
+-- CREATE OR REPLACE NOTEBOOK PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.product_analysis_project
+--     FROM '@TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage'
+--     COMMENT = 'Product category analysis using Snowpark Connect (SCOS)';
 
 -- ============================================================================
 -- EXECUTE NOTEBOOK PROJECT

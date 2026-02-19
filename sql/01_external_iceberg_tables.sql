@@ -60,8 +60,9 @@ CREATE OR REPLACE EXTERNAL VOLUME tlv_datalake_s3_ev
             STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::484577546576:role/build-tlv-s3-role'
             STORAGE_AWS_EXTERNAL_ID = 'BUILD_TLV_HOL'
          )
-      );
-
+      )
+    ALLOW_WRITES = false;
+    
 DESC EXTERNAL VOLUME tlv_datalake_s3_ev;
 
 -- ============================================================================
