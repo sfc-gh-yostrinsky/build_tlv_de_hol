@@ -22,7 +22,7 @@ This demo showcases 5 powerful Snowflake data engineering capabilities working t
 ├─────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                 │
 │     ┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐                 │
-│     │ CUSTOMERS_ICE   │         │  PRODUCTS_ICE   │         │   ORDERS_ICE    │  ← Iceberg      │
+│     │ EXT_CUSTOMERS   │         │  EXT_PRODUCTS   │         │   EXT_ORDERS    │  ← Iceberg      │
 │     └────────┬────────┘         └────────┬────────┘         └────────┬────────┘    Tables       │
 │              │                           │                           │                          │
 │              └───────────────────────────┼───────────────────────────┘                          │
@@ -55,69 +55,6 @@ This demo showcases 5 powerful Snowflake data engineering capabilities working t
 │                                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Important: Demo Setup vs Customer Scenario
-
-### For This Demo (Demo Setup)
-
-We create **Snowflake-managed Iceberg tables** with synthetic data:
-- `CATALOG = 'SNOWFLAKE'` - Snowflake manages the Iceberg catalog
-- Full DML support (INSERT, UPDATE, DELETE, MERGE)
-- Data stored in YOUR cloud storage in open Parquet/Iceberg format
-- **Script:** `sql/00_demo_setup_iceberg.sql`
-
-### For Customers (Production Scenario)
-
-Customers typically have **existing Iceberg tables** from other engines (Spark, Trino, Flink):
-- Use `METADATA_FILE_PATH` to point to existing metadata
-- Or use **Catalog Integrations** (Glue, Open Catalog/Polaris) for auto-sync
-- Read-only access in Snowflake (external engine manages writes)
-- **Script:** `sql/01_customer_iceberg_scenario.sql`
-
-```
-┌───────────────────────────────────────────────────────────────────────────┐
-│                    ICEBERG TABLE TYPES IN SNOWFLAKE                       │
-├───────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│  SNOWFLAKE-MANAGED (This Demo)         EXTERNALLY-MANAGED (Customers)     │
-│  ──────────────────────────────        ───────────────────────────────    │
-│  • CATALOG = 'SNOWFLAKE'               • METADATA_FILE_PATH = '...'       │
-│  • Full DML support                    • Read-only in Snowflake           │
-│  • Snowflake manages metadata          • External engine manages metadata │
-│  • Time Travel supported               • Catalog Integration for auto-sync│
-│                                                                           │
-└───────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## File Structure
-
-```
-build_tlv_demo/
-├── sql/
-│   ├── 00_demo_setup_iceberg.sql        # Snowflake-managed Iceberg + sample data
-│   ├── 01_external_iceberg_tables.sql   # Externally-managed Iceberg tables
-│   ├── 02_dynamic_table.sql             # Dynamic Table for hourly metrics
-│   ├── 03_dbt_deployment.sql            # dbt project deployment from workspace
-│   ├── 04_notebook_deployment.sql       # Notebook project deployment from workspace
-│   ├── 05_tasks_dag.sql                 # Task DAG orchestration (serverless)
-│   └── 99_cleanup.sql                   # Complete cleanup script
-├── dbt_ecommerce/
-│   ├── dbt_project.yml
-│   ├── profiles.yml                     # No env_var() or password fields!
-│   └── models/
-│       └── marts/
-│           └── customer_lifetime_value.sql
-├── notebooks/
-│   ├── product_category_analysis.ipynb  # Snowpark Connect notebook
-│   └── requirements.txt                 # pyspark, snowpark-connect[jvm]
-└── README.md                            # This file
-```
-
----
 
 ## Demo Execution Steps
 
@@ -155,7 +92,6 @@ Snowflake will clone the repository and create your workspace. Once complete, yo
 
 ```
 sql/
-├── 00_demo_setup_iceberg.sql
 ├── 01_external_iceberg_tables.sql
 ├── 02_dynamic_table.sql
 ├── 03_dbt_deployment.sql
@@ -168,19 +104,18 @@ notebooks/
 
 > **Note:** Throughout this demo, when we reference running a SQL file, you can open it directly from the workspace in Snowsight.
 
-### Step 1: Create Iceberg Tables and Sample Data
+### Step 1: Connect to External Iceberg Tables
 
-**Run:** `sql/00_demo_setup_iceberg.sql` in Snowsight
+**Run:** `sql/01_external_iceberg_tables.sql` in Snowsight
 
 **What it does:**
-1. Creates External Volume pointing to S3
-2. Creates Catalog Integration for Iceberg
-3. Creates 3 Iceberg tables with `CATALOG = 'SNOWFLAKE'`
-4. Populates synthetic e-commerce data (100 customers, 25 products, 1000 orders)
+1. Creates External Volume pointing to S3 (read-only)
+2. Creates Catalog Integration for Iceberg (`CATALOG_SOURCE = OBJECT_STORE`)
+3. Creates 3 externally-managed Iceberg tables pointing to existing metadata files
 
 **Key talking point:**
-> "Your data is stored in open Parquet format with Iceberg metadata. You own it, 
-> no vendor lock-in. Any Iceberg-compatible engine can read it."
+> "Your data stays in your S3 bucket. Snowflake reads the Iceberg metadata to understand
+> schema and file locations. No data copied, no ETL, zero vendor lock-in."
 
 ### Step 2: Create Dynamic Table
 
@@ -284,7 +219,7 @@ WITH customer_metrics AS (
         DATEDIFF('day', MAX(order_date), CURRENT_DATE()) AS recency_days,
         COUNT(DISTINCT order_id) AS frequency,
         SUM(quantity * unit_price) AS monetary
-    FROM orders_ice
+    FROM ext_orders
     GROUP BY customer_id
 )
 SELECT 
@@ -312,8 +247,8 @@ from pyspark.sql import functions as F
 spark = snowpark_connect.init_spark_session()
 
 # Read Iceberg tables as Spark DataFrames
-orders_df = spark.table("TLV_BUILD_HOL.DATA_ENG_DEMO.ORDERS_ICE")
-products_df = spark.table("TLV_BUILD_HOL.DATA_ENG_DEMO.PRODUCTS_ICE")
+orders_df = spark.table("TLV_BUILD_HOL.EXTERNAL_ICEBERG.EXT_ORDERS")
+products_df = spark.table("TLV_BUILD_HOL.EXTERNAL_ICEBERG.EXT_PRODUCTS")
 ```
 
 ---
@@ -354,57 +289,13 @@ products_df = spark.table("TLV_BUILD_HOL.DATA_ENG_DEMO.PRODUCTS_ICE")
 
 | Object | Type | Description |
 |--------|------|-------------|
-| `CUSTOMERS_ICE` | Iceberg Table | 100 synthetic customers |
-| `PRODUCTS_ICE` | Iceberg Table | 25 products across 4 categories |
-| `ORDERS_ICE` | Iceberg Table | 1000 orders with status, discounts |
+| `EXT_CUSTOMERS` | Iceberg Table (external) | 100 customers from data lake |
+| `EXT_PRODUCTS` | Iceberg Table (external) | 25 products across 4 categories |
+| `EXT_ORDERS` | Iceberg Table (external) | 1000 orders with status, discounts |
 | `DT_HOURLY_SALES_METRICS` | Dynamic Table | Auto-refreshing hourly aggregates |
 | `CUSTOMER_LIFETIME_VALUE` | Table (dbt) | RFM analysis with customer tiers |
 | `PRODUCT_CATEGORY_ANALYSIS` | Table (Notebook) | Category performance metrics |
 | `PIPELINE_RUN_LOG` | Table | Task execution history |
-
----
-
-## Cleanup
-
-Run `sql/99_cleanup.sql` in Snowsight:
-
-```sql
-USE ROLE ACCOUNTADMIN;
-USE WAREHOUSE COMPUTE_WH;
-
--- DROP DATABASE (removes all schemas, tables, tasks, projects, stages inside)
-DROP DATABASE IF EXISTS TLV_BUILD_HOL;
-
--- DROP ACCOUNT-LEVEL OBJECTS
-DROP EXTERNAL ACCESS INTEGRATION IF EXISTS TLV_BUILD_HOL_PYPI_EAI;
-DROP CATALOG INTEGRATION IF EXISTS tlv_iceberg_catalog_int;
-DROP EXTERNAL VOLUME IF EXISTS tlv_datalake_s3_ev;
-
--- VERIFICATION
-SHOW EXTERNAL VOLUMES LIKE '%tlv%';
-SHOW CATALOG INTEGRATIONS LIKE '%iceberg%';
-SHOW EXTERNAL ACCESS INTEGRATIONS LIKE '%tlv%';
-```
-
----
-
-## Troubleshooting
-
-### "CLI fails with syntax errors on script 05"
-The Snowflake CLI splits on semicolons, breaking multi-statement scripting blocks. Run `05_tasks_dag.sql` in Snowsight instead.
-
-### "Invalid identifier 'CNT' in task"
-When using `SYSTEM$SET_RETURN_VALUE`, build the message into a variable first, then use a bind variable:
-```sql
-msg := 'Count: ' || cnt::STRING;
-CALL SYSTEM$SET_RETURN_VALUE(:msg);
-```
-
-### "Notebook execution in stored procedures is not supported"
-`EXECUTE NOTEBOOK PROJECT` cannot be wrapped in scripting blocks. The notebook task must be a single statement.
-
-### "dbt task fails with serverless"
-`EXECUTE DBT PROJECT` requires a warehouse. Use `WAREHOUSE = COMPUTE_WH` instead of serverless for dbt tasks.
 
 ---
 
