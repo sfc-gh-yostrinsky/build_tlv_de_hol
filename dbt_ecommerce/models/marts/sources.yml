@@ -1,0 +1,62 @@
+version: 2
+
+sources:
+  - name: ecommerce
+    database: TLV_BUILD_HOL
+    schema: EXTERNAL_ICEBERG
+    description: E-commerce external Iceberg tables for the data engineering demo
+    
+    tables:
+      - name: ext_customers
+        description: Customer master data stored as external Iceberg table
+        columns:
+          - name: customer_id
+            description: Unique customer identifier
+          - name: first_name
+            description: Customer first name
+          - name: last_name
+            description: Customer last name
+          - name: email
+            description: Customer email address
+          - name: segment
+            description: Business segment (Enterprise, SMB, Consumer)
+          - name: region
+            description: Geographic region
+          - name: created_at
+            description: Customer creation timestamp
+
+      - name: ext_orders
+        description: Order transactions stored as external Iceberg table (partitioned by month)
+        columns:
+          - name: order_id
+            description: Unique order identifier
+          - name: customer_id
+            description: Foreign key to ext_customers
+          - name: product_id
+            description: Foreign key to ext_products
+          - name: quantity
+            description: Quantity ordered
+          - name: unit_price
+            description: Unit price at time of order
+          - name: discount_pct
+            description: Discount percentage applied
+          - name: order_date
+            description: Order timestamp
+          - name: status
+            description: Order status (PENDING, PROCESSING, SHIPPED, COMPLETED)
+
+      - name: ext_products
+        description: Product catalog stored as external Iceberg table
+        columns:
+          - name: product_id
+            description: Unique product identifier
+          - name: product_name
+            description: Product name
+          - name: category
+            description: Product category
+          - name: subcategory
+            description: Product subcategory
+          - name: cost_price
+            description: Product cost price
+          - name: list_price
+            description: Product list price

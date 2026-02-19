@@ -1,0 +1,16 @@
+# IMPORTANT: This profiles.yml is for Snowflake-native dbt execution
+# DO NOT use env_var(), password, or authenticator fields
+# Authentication is handled by Snowflake when running via snow dbt execute
+
+dbt_ecommerce:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: placeholder
+      user: placeholder
+      database: TLV_BUILD_HOL
+      warehouse: TLV_DBT_WH
+      schema: DATA_ENG_DEMO
+      role: ACCOUNTADMIN
+      threads: 4
