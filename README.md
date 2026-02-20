@@ -205,6 +205,16 @@ ORDER BY scheduled_time DESC;
 > "Tasks can run serverless - no warehouse to manage, pay only for what you use.
 > The DAG orchestrates everything: Dynamic Tables, dbt, and notebooks in parallel."
 
+### Step 6: The Fun Part - Talk to Your Data!
+
+You've built pipelines, deployed models, orchestrated tasks... now let's do something actually cool.
+
+Head over to **[intelligence/README.md](intelligence/README.md)** where you'll use **Cortex Code** to create a **Snowflake Intelligence** agent and ask business questions in plain English.
+
+No SQL. No dashboards. Just vibes and natural language.
+
+**PRIZE ALERT:** The first 3 people to correctly answer all 3 business questions win a prize! Find the instructor and show them your answers.
+
 ---
 
 ## Key Demo Scripts
