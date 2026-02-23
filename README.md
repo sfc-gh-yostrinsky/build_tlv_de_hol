@@ -60,11 +60,19 @@ This demo showcases 5 powerful Snowflake data engineering capabilities working t
 
 ### Step 0: Create Snowflake Workspace
 
-This demo uses a Snowflake Workspace to store the dbt project and notebook files. Rather than uploading files manually, we'll create a workspace directly from the GitHub repository.
+This demo uses a **Snowflake Workspace** to store the dbt project and notebook files. Workspaces provide Git integration, collaborative development, and direct SQL execution.
 
-#### Create an API Integration
+#### How to Access Workspaces
 
-First, create an API integration that allows Snowflake to connect to GitHub:
+In Snowsight, navigate to **Projects → Workspaces**
+
+You'll see a default workspace - this is your private workspace for ad-hoc work. For this demo, we'll create a new workspace connected to a Git repository.
+
+#### Create the API Integration
+
+First, we need to run some setup SQL. In your default workspace:
+1. Click **Add new → SQL File**
+2. Paste and run this SQL:
 
 ```sql
 USE ROLE ACCOUNTADMIN;
@@ -73,22 +81,21 @@ CREATE OR REPLACE API INTEGRATION tlv_build_git_integration
     API_PROVIDER = git_https_api
     API_ALLOWED_PREFIXES = ('https://github.com/sfc-gh-yostrinsky')
     ENABLED = TRUE;
+
+-- Enable cross-region inference for Cortex Code (Step 6)
+ALTER ACCOUNT SET CORTEX_ENABLED_CROSS_REGION = 'AWS_US';
 ```
 
-#### Create the Workspace
+#### Create the Workspace from Git
 
-1. In Snowsight, navigate to **Projects → Workspaces**
-2. Click **Create → From Git repository**
-3. Fill in the dialog:
-   - **Repository URL:** `https://github.com/sfc-gh-yostrinsky/build_tlv_de_hol`
-   - **Workspace name:** `HOL`
-   - **API Integration:** Select `tlv_build_git_integration`
-   - **Database:** `TLV_BUILD_HOL`
-   - **Schema:** `DATA_ENG_DEMO`
-4. Select **Public repository** (or authenticate for private repos)
-5. Click **Create**
+Click **My Workspace → From Git Repository** and fill in:
+- **Repository URL:** `https://github.com/sfc-gh-yostrinsky/build_tlv_de_hol`
+- **Workspace name:** `HOL`
+- **API Integration:** Select `tlv_build_git_integration`
+- Select **Public repository**
+- Click **Create**
 
-Snowflake will clone the repository and create your workspace. Once complete, you'll see all files in the workspace:
+Once complete, you'll see all files in the workspace:
 
 ```
 sql/
@@ -99,10 +106,18 @@ sql/
 ├── 05_tasks_dag.sql
 └── 99_cleanup.sql
 dbt_ecommerce/
+├── models/
+│   └── marts/
+│       └── customer_lifetime_value.sql
+└── dbt_project.yml
 notebooks/
+├── product_category_analysis_snowpark.ipynb
+└── product_category_analysis_snowpark_connect.ipynb
+intelligence/
+└── README.md
 ```
 
-> **Note:** Throughout this demo, when we reference running a SQL file, you can open it directly from the workspace in Snowsight.
+> **Note:** Throughout this demo, run SQL files directly from the workspace in Snowsight.
 
 ### Step 1: Connect to External Iceberg Tables
 
@@ -113,9 +128,13 @@ notebooks/
 2. Creates Catalog Integration for Iceberg (`CATALOG_SOURCE = OBJECT_STORE`)
 3. Creates 3 externally-managed Iceberg tables pointing to existing metadata files
 
-**Key talking point:**
+**Key takeaway:**
 > "Your data stays in your S3 bucket. Snowflake reads the Iceberg metadata to understand
-> schema and file locations. No data copied, no ETL, zero vendor lock-in."
+> schema and file locations. No data copied, no ETL, zero vendor lock-in.
+> 
+> **Note:** Using metadata file paths directly (as in this demo) is discouraged for production.
+> Use REST-based catalog integrations like AWS Glue, Microsoft OneLake, or Databricks Unity Catalog
+> for automatic metadata sync and better governance."
 
 ### Step 2: Create Dynamic Table
 
@@ -126,13 +145,17 @@ notebooks/
 - Joins orders with products, aggregates by hour and category
 - Automatically refreshes when source data changes
 
-**Key talking point:**
+**Key takeaway:**
 > "Dynamic Tables are declarative pipelines. Define the WHAT, Snowflake handles the WHEN.
 > No Airflow, no scheduling code, no orchestration headaches."
 
 ### Step 3: Deploy dbt Project
 
 **Run:** `sql/03_dbt_deployment.sql` in Snowsight
+
+**Explore the dbt project:**
+- Project config: `dbt_ecommerce/dbt_project.yml`
+- Model: `dbt_ecommerce/models/marts/customer_lifetime_value.sql`
 
 This script:
 1. Creates a dbt project from the workspace
@@ -151,7 +174,7 @@ snow dbt deploy dbt_ecommerce \
 SELECT * FROM TLV_BUILD_HOL.DATA_ENG_DEMO.CUSTOMER_LIFETIME_VALUE LIMIT 10;
 ```
 
-**Key talking point:**
+**Key takeaway:**
 > "dbt runs INSIDE Snowflake - no external scheduler, no credentials in config files,
 > native versioning and governance. Same dbt syntax you know, Snowflake execution."
 
@@ -173,7 +196,7 @@ This script:
 
 This demo uses **Snowpark** for simplicity. The `_snowpark_connect` notebook variant is included for teams migrating from Spark.
 
-**Key talking point:**
+**Key takeaway:**
 > "Snowpark lets data scientists write Python that executes inside Snowflake -
 > no data movement, familiar DataFrame APIs, same governance as SQL."
 
@@ -202,6 +225,10 @@ TASK_PIPELINE_ROOT (serverless, scheduled hourly)
 - **Auto-retry** - `TASK_AUTO_RETRY_ATTEMPTS = 2` for resilience
 
 **Monitor execution:**
+
+In Snowsight, navigate to **Transformation → Tasks** to see the DAG visualization and monitor task status.
+
+Or query the task history:
 ```sql
 SELECT name, state, return_value, error_message
 FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY(
@@ -210,7 +237,7 @@ FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY(
 ORDER BY scheduled_time DESC;
 ```
 
-**Key talking point:**
+**Key takeaway:**
 > "Tasks can run serverless - no warehouse to manage, pay only for what you use.
 > The DAG orchestrates everything: Dynamic Tables, dbt, and notebooks in parallel."
 

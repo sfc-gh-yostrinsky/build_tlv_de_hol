@@ -10,6 +10,28 @@
 -- NOTE: Task scheduling is in script 05_tasks_dag.sql
 -- ============================================================================
 
+-- ============================================================================
+-- WHAT ARE DBT PROJECTS ON SNOWFLAKE?
+-- ============================================================================
+/*
+dbt Projects on Snowflake let you run dbt transformations NATIVELY inside 
+Snowflake - no external infrastructure required.
+
+KEY BENEFITS:
+  • No dbt Cloud or local dbt CLI needed
+  • No credentials in profiles.yml - authentication via Snowflake session
+  • Deploy from Workspaces (Git-connected) or Stages (CI/CD)
+  • Schedule with Tasks for automation
+  • Full dbt functionality: models, tests, seeds, snapshots
+
+WORKFLOW:
+  1. Develop dbt models in a Workspace (with Git integration)
+  2. Deploy as a DBT PROJECT object (CREATE DBT PROJECT)
+  3. Execute with EXECUTE DBT PROJECT (SQL) or snow dbt execute (CLI)
+  4. Schedule with Tasks for automated runs
+*/
+-- ============================================================================
+
 USE ROLE ACCOUNTADMIN;
 USE DATABASE TLV_BUILD_HOL;
 USE WAREHOUSE COMPUTE_WH;
@@ -27,13 +49,7 @@ CREATE WAREHOUSE IF NOT EXISTS TLV_DBT_WH
 -- OPTION A: DEPLOY FROM WORKSPACE (SQL)
 -- ============================================================================
 -- Workspaces provide version control and can be deployed via SQL.
---
--- PREREQUISITE: Create a workspace in Snowsight first:
---   1. Go to Projects > Workspaces
---   2. Click "+ Workspace"
---   3. Name it "dbt_ecommerce_workspace"
---   4. Upload your dbt project files (dbt_project.yml, models/, etc.)
---
+
 -- The workspace path format is:
 --   snow://workspace/<USER>.<SCHEMA>."<workspace_name>"/versions/live
 

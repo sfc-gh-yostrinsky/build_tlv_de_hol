@@ -9,6 +9,39 @@
 -- 2. A Stage (for CI/CD pipelines)
 -- ============================================================================
 
+-- ============================================================================
+-- WHAT ARE NOTEBOOKS IN WORKSPACES?
+-- ============================================================================
+/*
+Snowflake Notebooks in Workspaces provide a full Jupyter-like experience 
+directly in Snowsight, powered by Snowpark Container Services.
+
+KEY BENEFITS:
+  • Native Jupyter experience in Snowsight - no external infrastructure
+  • Git integration via Workspaces for version control
+  • Snowpark Python pre-installed - write DataFrames that execute in Snowflake
+  • Access to Snowflake data without credentials or connection setup
+  • Schedule as NOTEBOOK PROJECTS for automated execution
+
+TWO MODES OF EXECUTION:
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  INTERACTIVE (development)        │  HEADLESS (production)             │
+  │  ─────────────────────────        │  ────────────────────              │
+  │  • Open notebook in Workspace     │  • CREATE NOTEBOOK PROJECT         │
+  │  • Click cells, see output        │  • EXECUTE NOTEBOOK PROJECT        │
+  │  • Great for exploration          │  • CI/CD friendly                  │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+COMPUTE RESOURCES:
+  • Compute Pool: Runs the Python kernel (Snowpark Container Services)
+  • Query Warehouse: Executes SQL and Snowpark pushdown operations
+
+SNOWPARK vs SNOWPARK CONNECT:
+  • Snowpark: Native Snowflake Python API - works out of the box
+  • Snowpark Connect: PySpark API for migrating Spark workloads (needs EAI)
+*/
+-- ============================================================================
+
 USE ROLE ACCOUNTADMIN;
 USE DATABASE TLV_BUILD_HOL;
 USE WAREHOUSE COMPUTE_WH;
@@ -27,11 +60,6 @@ CREATE WAREHOUSE IF NOT EXISTS TLV_NOTEBOOK_WH
 -- ============================================================================
 -- Workspaces provide version control and collaborative development
 -- The workspace path format: snow://workspace/USER$.SCHEMA."workspace_name"/versions/live
-
--- First, create a workspace in Snowsight UI:
--- 1. Go to Projects > Workspaces
--- 2. Create workspace named "product_analysis_workspace"
--- 3. Upload product_category_analysis_snowpark.ipynb and requirements.txt
 
 -- Then create the Notebook Project from that workspace:
 CREATE OR REPLACE NOTEBOOK PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.product_analysis_project

@@ -4,22 +4,7 @@ Now for the fun part! Let's use **Cortex Code (CoCo)** to create a **Snowflake I
 
 ## Prerequisites: Enable Cross-Region Inference
 
-Cortex Code requires access to Claude models. Since these models may not be available in your region, you need to enable **cross-region inference**.
-
-Run this as `ACCOUNTADMIN`:
-
-```sql
--- For AWS accounts (US, EU, or APJ)
-ALTER ACCOUNT SET CORTEX_ENABLED_CROSS_REGION = 'AWS_US';
-```
-
-> **Note:** Replace `AWS_US` with `AWS_EU` or `AWS_APJ` depending on your preferred inference region, or use `ANY_REGION` for maximum availability.
-
-Also ensure users have the required database roles:
-```sql
-GRANT DATABASE ROLE SNOWFLAKE.COPILOT_USER TO ROLE <your_role>;
-GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER TO ROLE <your_role>;
-```
+Cortex Code requires access to Claude models. Since these models may not be available in your region, you need to enable **cross-region inference**. This should have been set up in Step 0.
 
 ## The 3 Tables We Built
 
@@ -33,9 +18,8 @@ GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER TO ROLE <your_role>;
 
 | # | Business Question | Expected Answer |
 |---|-------------------|-----------------|
-| 1 | "Show me the top 3 Platinum tier customers by total revenue" | 3 specific customers with names and revenue |
+| 1 | "Show me the top 2 Platinum tier customers by total revenue" | 2 specific customers with names and revenue |
 | 2 | "Which product category has the best profit margin?" | Single category name with margin % |
-| 3 | "What hour had the highest sales in Feb 2026? Show me the trends" | Specific hour with trend chart |
 
 ---
 
@@ -46,12 +30,11 @@ GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER TO ROLE <your_role>;
 Open Cortex Code in your IDE and type:
 
 ```
-Create a semantic view for our e-commerce analytics that includes these 3 tables:
+Create a semantic view for our e-commerce analytics that includes these 2 tables:
 - TLV_BUILD_HOL.DATA_ENG_DEMO.CUSTOMER_LIFETIME_VALUE (customer tiers, RFM scores, revenue)
 - TLV_BUILD_HOL.DATA_ENG_DEMO.PRODUCT_CATEGORY_ANALYSIS (category metrics, margins)
-- TLV_BUILD_HOL.DATA_ENG_DEMO.DT_HOURLY_SALES_METRICS (hourly sales trends)
 
-Business users will ask about top customers, product performance, and sales trends.
+Business users will ask about top customers and product performance.
 ```
 
 CoCo will guide you through creating a semantic view YAML file with proper dimensions, measures, and relationships.
@@ -85,9 +68,9 @@ Now the magic - in the Intelligence chat interface, ask these questions:
 
 **Question 1: Top Customers**
 ```
-Show me the top 3 Platinum tier customers by total revenue
+Show me the top 2 Platinum tier customers by total revenue
 ```
-*Expected: A table with 3 rows showing customer_name, total_revenue, customer_tier*
+*Expected: A table with 2 rows showing customer_name, total_revenue, customer_tier*
 
 ---
 
@@ -99,16 +82,7 @@ Which product category has the best profit margin?
 
 ---
 
-**Question 3: Sales Trends**
-
-```
-What hour had the highest sales in Feb 2026? Show me the trends
-```
-*Expected: A specific hour with amount, plus a trend visualization*
-
----
-
-## Key Talking Point
+## Key Takeaway
 
 > "Your business users don't need to know SQL. They ask questions in plain English,
 > and Snowflake Intelligence translates it to optimized queries against your semantic model.
@@ -121,7 +95,7 @@ What hour had the highest sales in Feb 2026? Show me the trends
 You can also ask CoCo directly to query these tables:
 
 ```
-Query CUSTOMER_LIFETIME_VALUE and show me the top 3 Platinum customers by revenue
+Query CUSTOMER_LIFETIME_VALUE and show me the top 2 Platinum customers by revenue
 ```
 
 CoCo will write and execute the SQL for you, showing how the semantic model would answer the same question.
