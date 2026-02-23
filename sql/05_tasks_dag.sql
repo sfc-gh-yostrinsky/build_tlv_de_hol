@@ -135,12 +135,11 @@ CREATE OR ALTER TASK task_run_notebook
     AFTER task_pipeline_root
 AS
 EXECUTE NOTEBOOK PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.product_analysis_project
-    MAIN_FILE = 'product_category_analysis.ipynb'
+    MAIN_FILE = 'product_category_analysis_snowpark.ipynb'
     COMPUTE_POOL = 'SYSTEM_COMPUTE_POOL_CPU'
     QUERY_WAREHOUSE = 'TLV_NOTEBOOK_WH'
     RUNTIME = 'V2.2-CPU-PY3.11'
-    REQUIREMENTS_FILE = 'requirements.txt'
-    EXTERNAL_ACCESS_INTEGRATIONS = ('TLV_BUILD_HOL_PYPI_EAI');
+    ;
 
 -- ============================================================================
 -- FINALIZER TASK: Runs after all child tasks complete

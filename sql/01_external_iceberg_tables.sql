@@ -9,23 +9,11 @@
 -- ║  This shows how a CUSTOMER brings EXISTING Iceberg tables into Snowflake.║
 -- ║                                                                           ║
 -- ║  REAL WORLD: Customer has Iceberg tables in S3 written by Spark/Flink.   ║
--- ║  DEMO: We simulate this using the tables created in script 00.           ║
+-- ║  DEMO: We use pre-created Iceberg tables in S3 for this hands-on lab.    ║
 -- ║                                                                           ║
 -- ║  KEY POINT: Snowflake reads the Iceberg metadata file to understand      ║
 -- ║  the table schema, partitions, and data file locations.                  ║
 -- ║  NO DATA IS COPIED - Snowflake queries the files directly!               ║
--- ║                                                                           ║
--- ╚═══════════════════════════════════════════════════════════════════════════╝
---
--- ╔═══════════════════════════════════════════════════════════════════════════╗
--- ║  ⚠️  BEFORE RUNNING: UPDATE THE METADATA PATHS BELOW!                     ║
--- ╠═══════════════════════════════════════════════════════════════════════════╣
--- ║                                                                           ║
--- ║  The METADATA_FILE_PATH values in STEP 4 must match the output from      ║
--- ║  running script 00. Every time script 00 runs, NEW paths are created.    ║
--- ║                                                                           ║
--- ║  Run the last query in script 00 to get the current paths, then paste    ║
--- ║  them into STEP 4 below.                                                  ║
 -- ║                                                                           ║
 -- ╚═══════════════════════════════════════════════════════════════════════════╝
 -- ============================================================================
@@ -80,13 +68,6 @@ CREATE OR REPLACE CATALOG INTEGRATION tlv_iceberg_catalog_int
 -- STEP 4: CREATE EXTERNALLY-MANAGED ICEBERG TABLES
 -- ============================================================================
 --
--- ┌─────────────────────────────────────────────────────────────────────────┐
--- │  ⚠️  UPDATE THESE PATHS!                                                │
--- │                                                                         │
--- │  Replace each METADATA_FILE_PATH with the output from script 00.       │
--- │  The format is: <table_folder>/metadata/<snapshot>.metadata.json       │
--- └─────────────────────────────────────────────────────────────────────────┘
---
 -- HOW IT WORKS:
 --   1. Snowflake reads the metadata.json file
 --   2. Metadata contains: schema, partition spec, data file locations
@@ -98,24 +79,18 @@ CREATE OR REPLACE ICEBERG TABLE ext_customers
     EXTERNAL_VOLUME = 'tlv_datalake_s3_ev'
     CATALOG = 'tlv_iceberg_catalog_int'
     METADATA_FILE_PATH = 'customers_ice.tug9cOq0/metadata/00001-55bf24ff-46ed-4644-b4be-164ac2d4463c.metadata.json';
-    -- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    -- UPDATE THIS PATH from script 00 output!
 
 -- PRODUCTS TABLE
 CREATE OR REPLACE ICEBERG TABLE ext_products
     EXTERNAL_VOLUME = 'tlv_datalake_s3_ev'
     CATALOG = 'tlv_iceberg_catalog_int'
     METADATA_FILE_PATH = 'products_ice.wp76Qlxq/metadata/00001-c6f49b1a-d0e8-4a80-a136-a37612a60564.metadata.json';
-    -- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    -- UPDATE THIS PATH from script 00 output!
 
 -- ORDERS TABLE
 CREATE OR REPLACE ICEBERG TABLE ext_orders
     EXTERNAL_VOLUME = 'tlv_datalake_s3_ev'
     CATALOG = 'tlv_iceberg_catalog_int'
     METADATA_FILE_PATH = 'orders_ice.nChXnlVD/metadata/00001-15afc5d0-80c3-4108-8918-bb2994c720d4.metadata.json';
-    -- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    -- UPDATE THIS PATH from script 00 output!
 
 -- ============================================================================
 -- STEP 5: VERIFY - SCHEMA WAS AUTO-DETECTED!
@@ -177,7 +152,7 @@ LIMIT 10;
 │  SNOWFLAKE-MANAGED vs EXTERNALLY-MANAGED                                    │
 │  ───────────────────────────────────────                                    │
 │                                                                             │
-│  SNOWFLAKE-MANAGED (script 00):                                             │
+│  SNOWFLAKE-MANAGED:                                                         │
 │    • CATALOG = 'SNOWFLAKE'                                                  │
 │    • Full DML (INSERT/UPDATE/DELETE)                                        │
 │    • Snowflake manages metadata                                             │

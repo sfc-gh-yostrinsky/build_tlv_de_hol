@@ -22,12 +22,6 @@ CREATE WAREHOUSE IF NOT EXISTS TLV_NOTEBOOK_WH
     AUTO_SUSPEND = 60
     AUTO_RESUME = TRUE;
 
--- Create External Access Integration for PyPI (required for pip install)
-CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION TLV_BUILD_HOL_PYPI_EAI
-    ALLOWED_NETWORK_RULES = (SNOWFLAKE.EXTERNAL_ACCESS.PYPI_RULE)
-    ENABLED = TRUE
-    COMMENT = 'Allows notebook to install packages from PyPI';
-
 -- ============================================================================
 -- OPTION A: DEPLOY FROM WORKSPACE (Recommended)
 -- ============================================================================
@@ -37,7 +31,7 @@ CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION TLV_BUILD_HOL_PYPI_EAI
 -- First, create a workspace in Snowsight UI:
 -- 1. Go to Projects > Workspaces
 -- 2. Create workspace named "product_analysis_workspace"
--- 3. Upload product_category_analysis.ipynb and requirements.txt
+-- 3. Upload product_category_analysis_snowpark.ipynb and requirements.txt
 
 -- Then create the Notebook Project from that workspace:
 CREATE OR REPLACE NOTEBOOK PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.product_analysis_project
@@ -56,11 +50,11 @@ CREATE OR REPLACE NOTEBOOK PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.product_analysis_
 -- Upload files to stage (run from terminal or use PUT):
 /*
 -- Terminal commands:
-snow stage put notebooks/product_category_analysis.ipynb @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage --overwrite
+snow stage put notebooks/product_category_analysis_snowpark.ipynb @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage --overwrite
 snow stage put notebooks/requirements.txt @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage --overwrite
 
 -- Or SQL PUT (from Snowsight):
-PUT file:///path/to/product_category_analysis.ipynb @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+PUT file:///path/to/product_category_analysis_snowpark.ipynb @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
 PUT file:///path/to/requirements.txt @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
 */
 
@@ -79,12 +73,11 @@ PUT file:///path/to/requirements.txt @TLV_BUILD_HOL.DATA_ENG_DEMO.notebook_stage
 -- Requires: Compute Pool for Container Runtime
 
 EXECUTE NOTEBOOK PROJECT TLV_BUILD_HOL.DATA_ENG_DEMO.product_analysis_project
-    MAIN_FILE = 'product_category_analysis.ipynb'
+    MAIN_FILE = 'product_category_analysis_snowpark.ipynb'
     COMPUTE_POOL = 'SYSTEM_COMPUTE_POOL_CPU'
     QUERY_WAREHOUSE = 'TLV_NOTEBOOK_WH'
     RUNTIME = 'V2.2-CPU-PY3.11'
-    REQUIREMENTS_FILE = 'requirements.txt'
-    EXTERNAL_ACCESS_INTEGRATIONS = ('TLV_BUILD_HOL_PYPI_EAI');
+    ;
 
 -- ============================================================================
 -- VERIFY DEPLOYMENT
@@ -129,21 +122,6 @@ LIMIT 10;
 │  4. Schedule with Tasks for automation                                      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-*/
-
--- ============================================================================
--- SNOWPARK CONNECT (SCOS) REQUIREMENTS
--- ============================================================================
-/*
-The requirements.txt file includes:
-  snowpark-connect[jdk]   # Core SCOS with JDK support
-  pyspark>=3.5.0          # PySpark APIs
-
-This enables:
-  - PySpark DataFrame APIs executing in Snowflake
-  - Window functions, joins, aggregations
-  - spark.table() to read Snowflake tables
-  - df.write.saveAsTable() to write results back
 */
 
 -- ============================================================================

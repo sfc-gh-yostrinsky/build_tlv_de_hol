@@ -9,7 +9,7 @@ This demo showcases 5 powerful Snowflake data engineering capabilities working t
 | **Apache Iceberg Tables** | Open table format with full DML | 3 base tables (customers, products, orders) |
 | **Dynamic Tables** | Auto-refreshing materialized views | Real-time hourly sales metrics |
 | **dbt on Snowflake** | Native transformation framework | Customer Lifetime Value model |
-| **Snowpark Connect** | PySpark APIs in Snowflake | Product category analysis |
+| **Snowpark** | Python DataFrames in Snowflake | Product category analysis |
 | **Tasks DAG** | Parallel orchestration | Automated pipeline execution |
 
 ---
@@ -38,8 +38,8 @@ This demo showcases 5 powerful Snowflake data engineering capabilities working t
 │              ▼                          ▼                          ▼                            │
 │     ┌─────────────────┐        ┌─────────────────┐        ┌─────────────────┐                   │
 │     │    DYNAMIC      │        │       dbt       │        │    NOTEBOOK     │                   │
-│     │     TABLE       │        │      MODEL      │        │   (Snowpark     │                   │
-│     │   (Refresh)     │        │    (Execute)    │        │    Connect)     │                   │
+│     │     TABLE       │        │      MODEL      │        │   (Snowpark)    │                   │
+│     │   (Refresh)     │        │    (Execute)    │        │                 │                   │
 │     │                 │        │                 │        │                 │                   │
 │     │  Hourly Sales   │        │    Customer     │        │    Product      │                   │
 │     │    Metrics      │        │  Lifetime Value │        │    Category     │                   │
@@ -160,13 +160,22 @@ SELECT * FROM TLV_BUILD_HOL.DATA_ENG_DEMO.CUSTOMER_LIFETIME_VALUE LIMIT 10;
 **Run:** `sql/04_notebook_deployment.sql` in Snowsight
 
 This script:
-1. Creates an External Access Integration for PyPI (required for pip packages)
-2. Creates a Notebook Project from the workspace
-3. Executes the notebook with Snowpark Connect
+1. Creates a Notebook Project from the workspace
+2. Executes the notebook with Snowpark Python
+
+**Snowpark vs Snowpark Connect:**
+| Feature | Snowpark | Snowpark Connect |
+|---------|----------|------------------|
+| API Style | Snowpark DataFrame API | PySpark DataFrame API |
+| Setup | Works out of the box | Requires EAI for pip install |
+| Use Case | Native Snowflake development | Migrating existing Spark workloads |
+| Session | `get_active_session()` | `snowpark_connect.init_spark_session()` |
+
+This demo uses **Snowpark** for simplicity. The `_snowpark_connect` notebook variant is included for teams migrating from Spark.
 
 **Key talking point:**
-> "Your data scientists can use familiar PySpark APIs. Processing happens inside Snowflake -
-> no data movement, no Spark cluster to manage, same governance as SQL."
+> "Snowpark lets data scientists write Python that executes inside Snowflake -
+> no data movement, familiar DataFrame APIs, same governance as SQL."
 
 ### Step 5: Set Up Tasks DAG
 
@@ -247,18 +256,18 @@ SELECT
 FROM customer_metrics
 ```
 
-### Snowpark Connect Session Initialization
+### Snowpark Session Initialization
 
 ```python
-from snowflake import snowpark_connect
-from pyspark.sql import functions as F
+from snowflake.snowpark.context import get_active_session
+from snowflake.snowpark import functions as F
 
-# Initialize Snowpark Connect session
-spark = snowpark_connect.init_spark_session()
+# Get the active Snowpark session (available in Snowflake notebooks)
+session = get_active_session()
 
-# Read Iceberg tables as Spark DataFrames
-orders_df = spark.table("TLV_BUILD_HOL.EXTERNAL_ICEBERG.EXT_ORDERS")
-products_df = spark.table("TLV_BUILD_HOL.EXTERNAL_ICEBERG.EXT_PRODUCTS")
+# Read Iceberg tables as Snowpark DataFrames
+orders_df = session.table("TLV_BUILD_HOL.EXTERNAL_ICEBERG.EXT_ORDERS")
+products_df = session.table("TLV_BUILD_HOL.EXTERNAL_ICEBERG.EXT_PRODUCTS")
 ```
 
 ---
@@ -277,10 +286,11 @@ products_df = spark.table("TLV_BUILD_HOL.EXTERNAL_ICEBERG.EXT_PRODUCTS")
 > 2. Create a Catalog Integration with Glue or Open Catalog for auto-sync
 > Either way, Snowflake reads your data where it lives."
 
-### "Do I need to manage a Spark cluster for Snowpark Connect?"
+### "What's the difference between Snowpark and Snowpark Connect?"
 
-> "No. Snowpark Connect runs inside Snowflake. You write PySpark code, it executes
-> on Snowflake compute. No EMR, no Databricks clusters, just your warehouse."
+> "Snowpark is Snowflake's native Python DataFrame API - works out of the box.
+> Snowpark Connect lets you use PySpark APIs for migrating existing Spark workloads.
+> Both execute inside Snowflake - no external clusters needed."
 
 ### "How does dbt work without credentials in profiles.yml?"
 
