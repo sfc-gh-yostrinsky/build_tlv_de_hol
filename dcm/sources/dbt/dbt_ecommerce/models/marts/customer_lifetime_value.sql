@@ -1,6 +1,9 @@
 {{
     config(
         materialized='table',
+        table_format='iceberg',
+        external_volume='SNOWFLAKE_MANAGED',
+        iceberg_version=3,
         tags=['marts', 'customer_analytics']
     )
 }}
@@ -21,8 +24,8 @@ WITH customer_orders AS (
         MIN(o.order_date) AS first_order_date,
         MAX(o.order_date) AS last_order_date
         
-    FROM {{ source('ecommerce', 'ext_customers') }} c
-    LEFT JOIN {{ source('ecommerce', 'ext_orders') }} o 
+    FROM {{ source('ecommerce', 'customers') }} c
+    LEFT JOIN {{ source('ecommerce', 'orders') }} o 
         ON c.customer_id = o.customer_id
         AND o.status IN ('COMPLETED', 'SHIPPED')
     GROUP BY 

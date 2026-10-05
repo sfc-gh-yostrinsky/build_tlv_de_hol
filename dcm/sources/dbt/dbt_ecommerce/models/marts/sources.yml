@@ -2,13 +2,13 @@ version: 2
 
 sources:
   - name: ecommerce
-    database: TLV_BUILD_HOL
-    schema: EXTERNAL_ICEBERG
-    description: E-commerce external Iceberg tables for the data engineering demo
+    database: TLV_HOL_LAKE
+    schema: tlv_hol_raw
+    description: Raw e-commerce Iceberg tables in AWS Glue, read through the catalog-linked database TLV_HOL_LAKE
     
     tables:
-      - name: ext_customers
-        description: Customer master data stored as external Iceberg table
+      - name: customers
+        description: Customer master data stored as an Iceberg table in Glue
         columns:
           - name: customer_id
             description: Unique customer identifier
@@ -25,15 +25,15 @@ sources:
           - name: created_at
             description: Customer creation timestamp
 
-      - name: ext_orders
-        description: Order transactions stored as external Iceberg table (partitioned by month)
+      - name: orders
+        description: Order transactions stored as an Iceberg table in Glue (partitioned by month)
         columns:
           - name: order_id
             description: Unique order identifier
           - name: customer_id
-            description: Foreign key to ext_customers
+            description: Foreign key to customers
           - name: product_id
-            description: Foreign key to ext_products
+            description: Foreign key to products
           - name: quantity
             description: Quantity ordered
           - name: unit_price
@@ -45,8 +45,8 @@ sources:
           - name: status
             description: Order status (PENDING, PROCESSING, SHIPPED, COMPLETED)
 
-      - name: ext_products
-        description: Product catalog stored as external Iceberg table
+      - name: products
+        description: Product catalog stored as an Iceberg table in Glue
         columns:
           - name: product_id
             description: Unique product identifier

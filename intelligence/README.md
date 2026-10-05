@@ -11,7 +11,7 @@ Cortex Code requires access to Claude models. Since these models may not be avai
 | Table | Created By | Contains |
 |-------|------------|----------|
 | `CUSTOMER_LIFETIME_VALUE` | dbt | RFM scores, customer tiers, revenue metrics |
-| `PRODUCT_CATEGORY_ANALYSIS` | Notebook | Category performance, profit margins, rankings |
+| `PRODUCT_CATEGORY_ANALYSIS` | Spark code bundle | Category performance, profit margins, rankings |
 | `DT_HOURLY_SALES_METRICS` | Dynamic Table | Real-time hourly sales aggregates |
 
 ## The Business Questions We'll Answer

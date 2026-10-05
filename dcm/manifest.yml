@@ -1,0 +1,44 @@
+manifest_version: 2
+type: DCM_PROJECT
+default_target: DEV
+
+# ---------------------------------------------------------------------------
+# One source tree, two environments on the same account. Each target has its own
+# DCM project object (both in DCM_PROJECTS.PROJECTS) so DEV and PROD never deploy
+# over each other, and its own suffix so their databases/warehouses don't collide.
+#
+# Both environments READ the same shared raw lake (CLD TLV_HOL_LAKE, created by
+# sql/01_glue_catalog_cld.sql). Only the transformation layer is per-environment.
+# ---------------------------------------------------------------------------
+targets:
+  DEV:
+    account_identifier: SFSEEUROPE-DEMO_YOSTRINSKY_AWS_US_WEST2
+    project_name: DCM_PROJECTS.PROJECTS.TLV_BUILD_HOL_DEV
+    project_owner: ACCOUNTADMIN
+    templating_config: DEV
+  PROD:
+    account_identifier: SFSEEUROPE-DEMO_YOSTRINSKY_AWS_US_WEST2
+    project_name: DCM_PROJECTS.PROJECTS.TLV_BUILD_HOL_PROD
+    project_owner: ACCOUNTADMIN
+    templating_config: PROD
+
+templating:
+  defaults:
+    lake_db: 'TLV_HOL_LAKE'
+    lake_schema: 'tlv_hol_raw'
+    pipeline_schedule: '60 MINUTE'
+  configurations:
+    DEV:
+      env_suffix: '_DEV'
+      wh_size: 'XSMALL'
+      dbt_target: 'dev'
+    PROD:
+      env_suffix: ''
+      wh_size: 'SMALL'
+      dbt_target: 'prod'
+
+# The type:spark code bundle source. The asset contents become the bundle root,
+# so code_bundle.yml and the entry point sit at the top of this folder.
+assets:
+  product_analysis:
+    path: 'code_bundles/product_analysis/**/*'
