@@ -1,0 +1,10 @@
+[project]
+name = "tlv-hol-product-analysis"
+version = "0.1.0"
+description = "TLV DE HOL type:spark code bundle: product category analysis over the Glue CLD"
+requires-python = ">=3.11,<3.12"
+# tabulate renders the category summary in the job log, which is also the
+# visible proof that a PyPI dependency was installed into the bundle runtime.
+dependencies = [
+    "tabulate==0.10.0",
+]

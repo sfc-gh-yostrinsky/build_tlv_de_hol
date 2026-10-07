@@ -1,1 +1,0 @@
-snowpark-connect[jdk]

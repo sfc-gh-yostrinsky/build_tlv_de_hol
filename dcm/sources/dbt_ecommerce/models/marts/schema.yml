@@ -8,7 +8,7 @@ models:
     columns:
       - name: customer_id
         description: Unique customer identifier
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -32,7 +32,7 @@ models:
 
       - name: total_orders
         description: Total number of orders placed
-        tests:
+        data_tests:
           - not_null
 
       - name: total_revenue
@@ -73,6 +73,7 @@ models:
 
       - name: customer_tier
         description: Customer tier classification (Platinum, Gold, Silver, Bronze)
-        tests:
+        data_tests:
           - accepted_values:
-              values: ['Platinum', 'Gold', 'Silver', 'Bronze']
+              arguments:
+                values: ['Platinum', 'Gold', 'Silver', 'Bronze']

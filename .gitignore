@@ -1,3 +1,4 @@
 .snowflake
 
 sql/00_demo_setup_iceberg.sql
+out/

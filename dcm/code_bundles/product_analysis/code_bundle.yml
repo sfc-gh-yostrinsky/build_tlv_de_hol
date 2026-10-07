@@ -1,0 +1,13 @@
+bundle:
+  type: spark
+  compute_type: warehouse
+  language: python
+  compute_options:
+    runtime_version: "1.29"
+  properties:
+    # PyPI dependencies come straight from the uv-managed pyproject.toml and are
+    # installed from the default artifact repository (PyPI proxy, no EAI needed).
+    # Paths are relative to the bundle root.
+    python_dependencies:
+      requirements_files:
+        - pyproject.toml

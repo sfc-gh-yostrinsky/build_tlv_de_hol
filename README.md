@@ -1,356 +1,129 @@
-# Data Engineering Demo - Comprehensive Walkthrough
+# Data Engineering HOL: Glue lake + DCM (DEV/PROD) + dbt Fusion + Spark Code Bundle
 
 ## Overview
 
-This demo showcases 5 powerful Snowflake data engineering capabilities working together:
-
 | Technology | Purpose | Output |
-|------------|---------|--------|
-| **Apache Iceberg Tables** | Open table format with full DML | 3 base tables (customers, products, orders) |
-| **Dynamic Tables** | Auto-refreshing materialized views | Real-time hourly sales metrics |
-| **dbt on Snowflake** | Native transformation framework | Customer Lifetime Value model |
-| **Snowpark** | Python DataFrames in Snowflake | Product category analysis |
-| **Tasks DAG** | Parallel orchestration | Automated pipeline execution |
-
----
+|---|---|---|
+| **AWS Glue + Catalog-Linked Database** | Raw lake in Glue, read/written by Snowflake with Lake Formation vended credentials | `TLV_HOL_LAKE.tlv_hol_raw.{customers, products, orders}` (Iceberg v3) |
+| **DCM Projects** | Everything downstream as code, deployed to DEV and PROD from one source tree | DBs, warehouses, DT, dbt project, code bundle, task graph |
+| **Dynamic Table DAG** | 3 chained DTs, `REFRESH_MODE = ADAPTIVE`, `INITIALIZE = ON_SCHEDULE`, refreshed from the leaf by a serverless task | `DT_ORDER_LINES` -> `DT_HOURLY_SALES_METRICS` -> `DT_DAILY_CATEGORY_REGION` |
+| **dbt Fusion 2.0.0** | dbt project running inside Snowflake | `CUSTOMER_LIFETIME_VALUE` (Iceberg v3, Snowflake-managed storage) |
+| **Code Bundle (`type: spark`)** | PySpark on Snowpark Connect, with a PyPI dependency (`tabulate`) | `PRODUCT_CATEGORY_ANALYSIS` (Iceberg v3, Snowflake-managed storage) |
+| **Task Graph** | Orchestrates DT DAG, dbt and Spark in parallel; every task publishes a return value | `TLV_PIPELINE` (STARTED, hourly) |
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                   DATA ENGINEERING PIPELINE                                     │
-├─────────────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                                 │
-│     ┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐                 │
-│     │ EXT_CUSTOMERS   │         │  EXT_PRODUCTS   │         │   EXT_ORDERS    │  ← Iceberg      │
-│     └────────┬────────┘         └────────┬────────┘         └────────┬────────┘    Tables       │
-│              │                           │                           │                          │
-│              └───────────────────────────┼───────────────────────────┘                          │
-│                                          │                                                      │
-│                                          ▼                                                      │
-│                             ┌───────────────────────┐                                           │
-│                             │    TASK_PIPELINE      │  ← Root Task (Serverless)                 │
-│                             │        _ROOT          │    Scheduled hourly                       │
-│                             └───────────┬───────────┘                                           │
-│                                         │                                                       │
-│              ┌──────────────────────────┼──────────────────────────┐                            │
-│              │                          │                          │                            │
-│              ▼                          ▼                          ▼                            │
-│     ┌─────────────────┐        ┌─────────────────┐        ┌─────────────────┐                   │
-│     │    DYNAMIC      │        │       dbt       │        │    NOTEBOOK     │                   │
-│     │     TABLE       │        │      MODEL      │        │   (Snowpark)    │                   │
-│     │   (Refresh)     │        │    (Execute)    │        │                 │                   │
-│     │                 │        │                 │        │                 │                   │
-│     │  Hourly Sales   │        │    Customer     │        │    Product      │                   │
-│     │    Metrics      │        │  Lifetime Value │        │    Category     │                   │
-│     │                 │        │                 │        │    Analysis     │                   │
-│     └────────┬────────┘        └────────┬────────┘        └────────┬────────┘                   │
-│              │                          │                          │                            │
-│              └──────────────────────────┼──────────────────────────┘                            │
-│                                         │                                                       │
-│                                         ▼                                                       │
-│                             ┌───────────────────────────────┐                                   │
-│                             │  TASK_PIPELINE_FINALIZER      │  ← Finalizer Task                 │
-│                             └───────────────────────────────┘    Logs completion                │
-│                                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+ AWS (S3 + Glue tlv_hol_raw + Lake Formation)
+        │  Glue Iceberg REST, vended credentials
+        ▼
+ CATALOG INTEGRATION TLV_HOL_GLUE_CI ──► CLD TLV_HOL_LAKE          (shared by DEV + PROD)
+        │
+        ▼                        DCM project per environment (dcm/)
+ ┌───────────────────────────── TLV_BUILD_HOL_DEV  /  TLV_BUILD_HOL ─────────────────────────────┐
+ │  TLV_PIPELINE (task graph)                                                                     │
+ │   T_START ─┬─ T_REFRESH_DT ─ DT_ORDER_LINES > DT_HOURLY_SALES_METRICS > DT_DAILY_CATEGORY_REGION │
+ │            ├─ T_RUN_DBT    ─ CUSTOMER_LIFETIME_VALUE            (dbt 2.0.0, Iceberg v3)       ├─ T_FINISH
+ │            └─ T_RUN_SPARK  ─ PRODUCT_CATEGORY_ANALYSIS          (type:spark, Iceberg v3)      │
+ └────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Demo Execution Steps
+| | DEV | PROD |
+|---|---|---|
+| DCM project | `DCM_PROJECTS.PROJECTS.TLV_BUILD_HOL_DEV` | `DCM_PROJECTS.PROJECTS.TLV_BUILD_HOL_PROD` |
+| Database | `TLV_BUILD_HOL_DEV` | `TLV_BUILD_HOL` |
+| Warehouses | `TLV_{DT,DBT,SPARK}_WH_DEV` (XSMALL) | `TLV_{DT,DBT,SPARK}_WH` (SMALL) |
+| dbt target | `dev` | `prod` |
 
-### Step 0: Create Snowflake Workspace
-
-This demo uses a **Snowflake Workspace** to store the dbt project and notebook files. Workspaces provide Git integration, collaborative development, and direct SQL execution.
-
-#### How to Access Workspaces
-
-In Snowsight, navigate to **Projects → Workspaces**
-
-You'll see a default workspace - this is your private workspace for ad-hoc work. For this demo, we'll create a new workspace connected to a Git repository.
-
-#### Create the API Integration
-
-First, we need to run some setup SQL. In your default workspace:
-1. Click **Add new → SQL File**
-2. Paste and run this SQL:
-
-```sql
-USE ROLE ACCOUNTADMIN;
-
-CREATE OR REPLACE API INTEGRATION tlv_build_git_integration
-    API_PROVIDER = git_https_api
-    API_ALLOWED_PREFIXES = ('https://github.com/sfc-gh-yostrinsky')
-    ENABLED = TRUE;
-
--- Enable cross-region inference for Cortex Code (Step 6)
-ALTER ACCOUNT SET CORTEX_ENABLED_CROSS_REGION = 'AWS_US';
-```
-
-#### Create the Workspace from Git
-
-Click **My Workspace → From Git Repository** and fill in:
-- **Repository URL:** `https://github.com/sfc-gh-yostrinsky/build_tlv_de_hol`
-- **Workspace name:** `HOL`
-- **API Integration:** Select `tlv_build_git_integration`
-- Select **Public repository**
-- Click **Create**
-
-Once complete, you'll see all files in the workspace:
+## Layout
 
 ```
-sql/
-├── 01_external_iceberg_tables.sql
-├── 02_dynamic_table.sql
-├── 03_dbt_deployment.sql
-├── 04_notebook_deployment.sql
-├── 05_tasks_dag.sql
-└── 99_cleanup.sql
-dbt_ecommerce/
-├── models/
-│   └── marts/
-│       └── customer_lifetime_value.sql
-└── dbt_project.yml
-notebooks/
-├── product_category_analysis_snowpark.ipynb
-└── product_category_analysis_snowpark_connect.ipynb
-intelligence/
-└── README.md
+aws/setup_glue_lakeformation.sh   S3 bucket, Glue DB, IAM roles, Lake Formation grants
+aws/teardown.sh                   remove the AWS side
+sql/01_glue_catalog_cld.sql       catalog integration, CLD, raw Iceberg v3 tables + seed data
+sql/99_cleanup.sql                Snowflake cleanup (after `snow dcm purge`)
+dcm/manifest.yml                  DEV/PROD targets + templating
+dcm/sources/definitions/*.sql     infrastructure, tables, DT DAG, dbt project
+dcm/sources/definitions/pipeline.yml  code bundle + task graph (Pipeline Builder; schedule set here)
+dcm/sources/dbt_ecommerce/        dbt project (Fusion 2.0.0; must be under sources/ for CLI deploys)
+dcm/code_bundles/product_analysis/ type:spark bundle: code_bundle.yml, pyproject.toml, .py
 ```
 
-> **Note:** Throughout this demo, run SQL files directly from the workspace in Snowsight.
+## Run order
 
-### Step 1: Connect to External Iceberg Tables
+Prerequisites: AWS CLI logged in to the target account, Snowflake CLI 3.17+, role ACCOUNTADMIN,
+and the parent schema `DCM_PROJECTS.PROJECTS`.
 
-**Run:** `sql/01_external_iceberg_tables.sql` in Snowsight
-
-**What it does:**
-1. Creates External Volume pointing to S3 (read-only)
-2. Creates Catalog Integration for Iceberg (`CATALOG_SOURCE = OBJECT_STORE`)
-3. Creates 3 externally-managed Iceberg tables pointing to existing metadata files
-
-**Key takeaway:**
-> "Your data stays in your S3 bucket. Snowflake reads the Iceberg metadata to understand
-> schema and file locations. No data copied, no ETL, zero vendor lock-in.
-> 
-> **Note:** Using metadata file paths directly (as in this demo) is discouraged for production.
-> Use REST-based catalog integrations like AWS Glue, Microsoft OneLake, or Databricks Unity Catalog
-> for automatic metadata sync and better governance."
-
-### Step 2: Create Dynamic Table
-
-**Run:** `sql/02_dynamic_table.sql` in Snowsight
-
-**What it does:**
-- Creates `DT_HOURLY_SALES_METRICS` with `TARGET_LAG = '5 minutes'`
-- Joins orders with products, aggregates by hour and category
-- Automatically refreshes when source data changes
-
-**Key takeaway:**
-> "Dynamic Tables are declarative pipelines. Define the WHAT, Snowflake handles the WHEN.
-> No Airflow, no scheduling code, no orchestration headaches."
-
-### Step 3: Deploy dbt Project
-
-**Run:** `sql/03_dbt_deployment.sql` in Snowsight
-
-**Explore the dbt project:**
-- Project config: `dbt_ecommerce/dbt_project.yml`
-- Model: `dbt_ecommerce/models/marts/customer_lifetime_value.sql`
-
-This script:
-1. Creates a dbt project from the workspace
-2. Executes the project to build the `customer_lifetime_value` model
-
-**Or deploy via CLI (terminal):**
 ```bash
-snow dbt deploy dbt_ecommerce \
-  --source ./dbt_ecommerce \
-  --database TLV_BUILD_HOL \
-  --schema DATA_ENG_DEMO
+# 1. AWS side
+./aws/setup_glue_lakeformation.sh
+
+# 2. Shared raw lake. After the catalog integration is created, copy API_AWS_IAM_USER_ARN and
+#    API_AWS_EXTERNAL_ID from DESC CATALOG INTEGRATION into the trust policy, then re-run the file:
+snow sql -f sql/01_glue_catalog_cld.sql
+./aws/setup_glue_lakeformation.sh trust <API_AWS_IAM_USER_ARN> <API_AWS_EXTERNAL_ID>
+snow sql -f sql/01_glue_catalog_cld.sql
+
+# 3. dbt version: DEFINE DBT PROJECT does not accept DBT_VERSION, so set the account default
+snow sql -q "ALTER ACCOUNT SET DEFAULT_DBT_VERSION = '2.0.0'"
+
+# 4. Register both DCM projects once
+snow sql -q "CREATE DCM PROJECT IF NOT EXISTS DCM_PROJECTS.PROJECTS.TLV_BUILD_HOL_DEV"
+snow sql -q "CREATE DCM PROJECT IF NOT EXISTS DCM_PROJECTS.PROJECTS.TLV_BUILD_HOL_PROD"
+
+# 5. Plan and deploy each environment
+cd dcm
+snow dcm plan   --target DEV --save-output
+snow dcm deploy --target DEV --alias <change>
+#   ...same with --target PROD
+
+# 6. Graphs deploy STARTED (hourly). Run one now:
+snow sql -q "EXECUTE TASK GRAPH TLV_BUILD_HOL_DEV.DATA_ENG_DEMO.TLV_PIPELINE"
 ```
 
-**Verify:**
-```sql
-SELECT * FROM TLV_BUILD_HOL.DATA_ENG_DEMO.CUSTOMER_LIFETIME_VALUE LIMIT 10;
-```
+Monitor in Snowsight under **Transformation > Tasks**, or:
 
-**Key takeaway:**
-> "dbt runs INSIDE Snowflake - no external scheduler, no credentials in config files,
-> native versioning and governance. Same dbt syntax you know, Snowflake execution."
-
-### Step 4: Deploy Notebook Project
-
-**Run:** `sql/04_notebook_deployment.sql` in Snowsight
-
-This script:
-1. Creates a Notebook Project from the workspace
-2. Executes the notebook with Snowpark Python
-
-**Snowpark vs Snowpark Connect:**
-| Feature | Snowpark | Snowpark Connect |
-|---------|----------|------------------|
-| API Style | Snowpark DataFrame API | PySpark DataFrame API |
-| Setup | Works out of the box | Requires EAI for pip install |
-| Use Case | Native Snowflake development | Migrating existing Spark workloads |
-| Session | `get_active_session()` | `snowpark_connect.init_spark_session()` |
-
-This demo uses **Snowpark** for simplicity. The `_snowpark_connect` notebook variant is included for teams migrating from Spark.
-
-**Key takeaway:**
-> "Snowpark lets data scientists write Python that executes inside Snowflake -
-> no data movement, familiar DataFrame APIs, same governance as SQL."
-
-### Step 5: Set Up Tasks DAG
-
-**Run:** `sql/05_tasks_dag.sql` in Snowsight
-
-> **Note:** This script must be run in Snowsight, not via CLI, because it contains 
-> multi-statement scripting blocks (BEGIN/END) that the CLI doesn't parse correctly.
-
-**What it creates:**
-```
-TASK_PIPELINE_ROOT (serverless, scheduled hourly)
-    │
-    ├── TASK_REFRESH_DYNAMIC_TABLE (serverless) ────┐
-    ├── TASK_RUN_DBT_MODEL (warehouse) ─────────────┼──→ TASK_PIPELINE_FINALIZER
-    └── TASK_RUN_NOTEBOOK (serverless) ─────────────┘
-```
-
-**Task features demonstrated:**
-- **Serverless execution** - No warehouse needed (except dbt which requires one)
-- **Return values** - Each task returns record counts via `SYSTEM$SET_RETURN_VALUE`
-- **Parallel execution** - Child tasks run simultaneously after root
-- **Finalizer task** - Runs after ALL children complete, regardless of success/failure
-- **Scripting blocks** - DECLARE/BEGIN/END for complex task logic
-- **Auto-retry** - `TASK_AUTO_RETRY_ATTEMPTS = 2` for resilience
-
-**Monitor execution:**
-
-In Snowsight, navigate to **Transformation → Tasks** to see the DAG visualization and monitor task status.
-
-Or query the task history:
 ```sql
 SELECT name, state, return_value, error_message
-FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY(
-    SCHEDULED_TIME_RANGE_START => DATEADD('hour', -1, CURRENT_TIMESTAMP())
-))
+FROM TABLE(TLV_BUILD_HOL_DEV.INFORMATION_SCHEMA.TASK_HISTORY(
+    SCHEDULED_TIME_RANGE_START => DATEADD('hour', -1, CURRENT_TIMESTAMP())))
+WHERE database_name = 'TLV_BUILD_HOL_DEV'
 ORDER BY scheduled_time DESC;
+
+SELECT * FROM TLV_BUILD_HOL_DEV.DATA_ENG_DEMO.PIPELINE_RUN_LOG ORDER BY created_at DESC;
 ```
 
-**Key takeaway:**
-> "Tasks can run serverless - no warehouse to manage, pay only for what you use.
-> The DAG orchestrates everything: Dynamic Tables, dbt, and notebooks in parallel."
+## Gotchas worth knowing
 
-### Step 6: The Fun Part - Talk to Your Data!
+- **Glue identifiers are lowercase.** The CLD uses `CATALOG_CASE_SENSITIVITY = CASE_INSENSITIVE`, so SQL
+  and dbt can write `TLV_HOL_LAKE.tlv_hol_raw.orders` unquoted. Snowpark Connect upper-cases names by
+  default, so the Spark job sets `spark.sql.caseSensitive=true`.
+- **Glue IRC needs `BASE_LOCATION`** on `CREATE ICEBERG TABLE` and does not support CTAS, so the seed
+  tables are created first and then INSERTed.
+- **dbt version.** `DEFINE DBT PROJECT` rejects `DBT_VERSION`; the version comes from the account
+  parameter `DEFAULT_DBT_VERSION`.
+- **DCM task clause order.** On child tasks, `COMMENT` must come before `AFTER`.
+- **Task graphs.** Members of a task graph can't be run individually; use `EXECUTE TASK GRAPH`.
+- **Spark output table.** The bundle recreates it every run with
+  `writeTo(...).using("iceberg").tableProperty("format-version", "3").createOrReplace()`, with
+  `snowpark.connect.iceberg.external_volume = SNOWFLAKE_MANAGED`.
+- **DT DAG.** Every DT is `TARGET_LAG = DOWNSTREAM` and nothing consumes the leaf, so the DAG refreshes only
+  when the serverless task `T_REFRESH_DT` refreshes the leaf (upstream DTs refresh first). `INITIALIZE` is
+  immutable in DCM: switching an existing DT to `ON_SCHEDULE` means dropping it first.
+- **Return values.** A Spark bundle can't call `SYSTEM$SET_RETURN_VALUE`, so `T_RUN_SPARK` sets it in SQL
+  after the bundle returns. Read them in `TASK_HISTORY.RETURN_VALUE`.
+- **Telemetry.** Each environment database sets `LOG_LEVEL`/`LOG_EVENT_LEVEL = TRACE`, `TRACE_LEVEL = ALWAYS`,
+  `METRIC_LEVEL = ALL`; everything lands in `SNOWFLAKE.TELEMETRY.EVENTS`.
 
-You've built pipelines, deployed models, orchestrated tasks... now let's do something actually cool.
+## Cleanup
 
-Head over to **[intelligence/README.md](intelligence/README.md)** where you'll use **Cortex Code** to create a **Snowflake Intelligence** agent and ask business questions in plain English.
-
-No SQL. No dashboards. Just vibes and natural language.
-
-**PRIZE ALERT:** The first 3 people to correctly answer all 3 business questions win a prize! Find the instructor and show them your answers.
-
----
-
-## Key Demo Scripts
-
-### Customer Lifetime Value (dbt model)
-
-```sql
--- RFM Analysis (Recency, Frequency, Monetary)
-WITH customer_metrics AS (
-    SELECT 
-        customer_id,
-        DATEDIFF('day', MAX(order_date), CURRENT_DATE()) AS recency_days,
-        COUNT(DISTINCT order_id) AS frequency,
-        SUM(quantity * unit_price) AS monetary
-    FROM ext_orders
-    GROUP BY customer_id
-)
-SELECT 
-    *,
-    NTILE(5) OVER (ORDER BY recency_days DESC) AS r_score,
-    NTILE(5) OVER (ORDER BY frequency) AS f_score,
-    NTILE(5) OVER (ORDER BY monetary) AS m_score,
-    (r_score + f_score + m_score) AS ltv_score,
-    CASE 
-        WHEN ltv_score >= 12 THEN 'Champions'
-        WHEN ltv_score >= 9 THEN 'Loyal'
-        WHEN ltv_score >= 6 THEN 'Potential'
-        ELSE 'At Risk'
-    END AS customer_tier
-FROM customer_metrics
+```bash
+cd dcm && snow dcm purge --target PROD && snow dcm purge --target DEV && cd ..
+snow sql -f sql/99_cleanup.sql
+./aws/teardown.sh
 ```
 
-### Snowpark Session Initialization
+## Next: talk to your data
 
-```python
-from snowflake.snowpark.context import get_active_session
-from snowflake.snowpark import functions as F
-
-# Get the active Snowpark session (available in Snowflake notebooks)
-session = get_active_session()
-
-# Read Iceberg tables as Snowpark DataFrames
-orders_df = session.table("TLV_BUILD_HOL.EXTERNAL_ICEBERG.EXT_ORDERS")
-products_df = session.table("TLV_BUILD_HOL.EXTERNAL_ICEBERG.EXT_PRODUCTS")
-```
-
----
-
-## Customer Questions & Answers
-
-### "How is this different from regular tables?"
-
-> "Iceberg tables store data in open Parquet format with Iceberg metadata. You can query
-> the same data from Spark, Trino, or Flink without copying it. Zero vendor lock-in."
-
-### "What about existing Iceberg data in our data lake?"
-
-> "You have two options:
-> 1. Point to your existing metadata file (`METADATA_FILE_PATH`)
-> 2. Create a Catalog Integration with Glue or Open Catalog for auto-sync
-> Either way, Snowflake reads your data where it lives."
-
-### "What's the difference between Snowpark and Snowpark Connect?"
-
-> "Snowpark is Snowflake's native Python DataFrame API - works out of the box.
-> Snowpark Connect lets you use PySpark APIs for migrating existing Spark workloads.
-> Both execute inside Snowflake - no external clusters needed."
-
-### "How does dbt work without credentials in profiles.yml?"
-
-> "When dbt runs inside Snowflake via `EXECUTE DBT PROJECT`, authentication is handled
-> by your Snowflake session. No passwords or tokens in config files."
-
-### "What's the difference between serverless and warehouse tasks?"
-
-> "Serverless tasks use Snowflake-managed compute - no warehouse to configure, instant 
-> scale, pay only for execution time. Use warehouses when you need specific sizing or 
-> for operations that require them (like EXECUTE DBT PROJECT)."
-
----
-
-## Outputs Created
-
-| Object | Type | Description |
-|--------|------|-------------|
-| `EXT_CUSTOMERS` | Iceberg Table (external) | 100 customers from data lake |
-| `EXT_PRODUCTS` | Iceberg Table (external) | 25 products across 4 categories |
-| `EXT_ORDERS` | Iceberg Table (external) | 1000 orders with status, discounts |
-| `DT_HOURLY_SALES_METRICS` | Dynamic Table | Auto-refreshing hourly aggregates |
-| `CUSTOMER_LIFETIME_VALUE` | Table (dbt) | RFM analysis with customer tiers |
-| `PRODUCT_CATEGORY_ANALYSIS` | Table (Notebook) | Category performance metrics |
-| `PIPELINE_RUN_LOG` | Table | Task execution history |
-
----
-
-## Additional Resources
-
-- [Iceberg Tables in Snowflake](https://docs.snowflake.com/en/user-guide/tables-iceberg)
-- [Dynamic Tables](https://docs.snowflake.com/en/user-guide/dynamic-tables-about)
-- [dbt on Snowflake](https://docs.snowflake.com/en/developer-guide/snowflake-cli/dbt-commands/overview)
-- [Snowpark Connect for Spark](https://docs.snowflake.com/en/developer-guide/snowpark/python/snowpark-connect)
-- [Tasks](https://docs.snowflake.com/en/user-guide/tasks-intro)
-- [Serverless Tasks](https://docs.snowflake.com/en/user-guide/tasks-intro#serverless-tasks)
+See **[intelligence/README.md](intelligence/README.md)** to build a semantic view and a Snowflake
+Intelligence agent over `CUSTOMER_LIFETIME_VALUE` and `PRODUCT_CATEGORY_ANALYSIS`.

@@ -1,0 +1,25 @@
+# Snowflake-native dbt (dbt Fusion 2.0.0 via DEFINE DBT PROJECT in DCM).
+# No credentials: Snowflake authenticates the run. DCM templating and dbt targets
+# are isolated, so DEV/PROD are mirrored here and selected by DEFAULT_TARGET /
+# --target in the task (dbt_target in dcm/manifest.yml).
+dbt_ecommerce:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: placeholder
+      user: placeholder
+      role: ACCOUNTADMIN
+      database: TLV_BUILD_HOL_DEV
+      schema: DATA_ENG_DEMO
+      warehouse: TLV_DBT_WH_DEV
+      threads: 4
+    prod:
+      type: snowflake
+      account: placeholder
+      user: placeholder
+      role: ACCOUNTADMIN
+      database: TLV_BUILD_HOL
+      schema: DATA_ENG_DEMO
+      warehouse: TLV_DBT_WH
+      threads: 4

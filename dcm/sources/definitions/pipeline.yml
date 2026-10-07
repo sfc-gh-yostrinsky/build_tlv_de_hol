@@ -1,0 +1,117 @@
+definitions:
+  - resource: code_bundle
+    name: TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.CB_PRODUCT_ANALYSIS
+    from:
+      type: asset
+      asset: product_analysis
+    comment: >-
+      TLV DE HOL product category analysis, type:spark + PyPI dep
+      ({{dbt_target}}). Managed by DCM.
+  - resource: task_graph_object
+    name: TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.TLV_PIPELINE
+    roots:
+      - T_START
+    schedule:
+      type: interval
+      value: 60
+      unit: minutes
+    state: started
+    comment: >-
+      TLV DE HOL pipeline: DT DAG + dbt + Spark ({{dbt_target}}). Managed by
+      DCM.
+    task_defaults:
+      user_task_timeout_ms: 1800000
+  - resource: task
+    name: TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_START
+    user_task_managed_initial_warehouse_size: XSMALL
+    comment: >-
+      TLV DE HOL pipeline root: log START ({{dbt_target}}). Serverless. Managed
+      by DCM.
+    definition:
+      type: sql
+      value: |
+        BEGIN
+            INSERT INTO TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.PIPELINE_RUN_LOG (RUN_ID, PIPELINE_NAME, STATUS)
+            SELECT SYSTEM$TASK_RUNTIME_INFO('CURRENT_TASK_GRAPH_RUN_GROUP_ID'), 'tlv_hol_pipeline', 'STARTED';
+            LET msg STRING := 'started {{dbt_target}} run ' || SYSTEM$TASK_RUNTIME_INFO('CURRENT_TASK_GRAPH_RUN_GROUP_ID');
+            CALL SYSTEM$SET_RETURN_VALUE(:msg);
+        END
+  - resource: task
+    name: TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_REFRESH_DT
+    user_task_managed_initial_warehouse_size: XSMALL
+    predecessors:
+      - TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_START
+    comment: >-
+      TLV DE HOL: refresh leaf DT DT_DAILY_CATEGORY_REGION, which refreshes its
+      upstream DTs ({{dbt_target}}). Serverless. Managed by DCM.
+    definition:
+      type: sql
+      value: |
+        BEGIN
+            ALTER DYNAMIC TABLE TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.DT_DAILY_CATEGORY_REGION REFRESH;
+            LET lines INTEGER := (SELECT COUNT(*) FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.DT_ORDER_LINES);
+            LET hourly INTEGER := (SELECT COUNT(*) FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.DT_HOURLY_SALES_METRICS);
+            LET daily INTEGER := (SELECT COUNT(*) FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.DT_DAILY_CATEGORY_REGION);
+            LET msg STRING := 'DT DAG refreshed: order_lines=' || :lines || ' hourly=' || :hourly || ' daily=' || :daily;
+            CALL SYSTEM$SET_RETURN_VALUE(:msg);
+        END
+  - resource: task
+    name: TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_RUN_DBT
+    warehouse: TLV_DBT_WH{{env_suffix}}
+    predecessors:
+      - TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_START
+    comment: >-
+      TLV DE HOL: dbt build (run + test) of the Iceberg v3 CLV model
+      ({{dbt_target}}). Managed by DCM.
+    definition:
+      type: sql
+      value: |
+        BEGIN
+            EXECUTE DBT PROJECT TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.DBT_ECOMMERCE ARGS = 'build --target {{dbt_target}}';
+            LET clv INTEGER := (SELECT COUNT(*) FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.CUSTOMER_LIFETIME_VALUE);
+            LET platinum INTEGER := (SELECT COUNT(*) FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.CUSTOMER_LIFETIME_VALUE WHERE customer_tier = 'Platinum');
+            LET msg STRING := 'dbt build ok: customer_lifetime_value=' || :clv || ' platinum=' || :platinum;
+            CALL SYSTEM$SET_RETURN_VALUE(:msg);
+        END
+  - resource: task
+    name: TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_RUN_SPARK
+    warehouse: TLV_SPARK_WH{{env_suffix}}
+    predecessors:
+      - TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_START
+    comment: >-
+      TLV DE HOL: type:spark product analysis bundle ({{dbt_target}}). Managed
+      by DCM.
+    definition:
+      type: sql
+      value: |
+        BEGIN
+            EXECUTE CODE BUNDLE TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.CB_PRODUCT_ANALYSIS
+                ENTRYPOINT = 'product_category_analysis.py'
+                ARGUMENTS = ('--target-db', 'TLV_BUILD_HOL{{env_suffix}}', '--lake-db', '{{lake_db}}', '--lake-schema', '{{lake_schema}}');
+            LET n INTEGER := (SELECT COUNT(*) FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.PRODUCT_CATEGORY_ANALYSIS);
+            LET top_cat STRING := (SELECT category FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.PRODUCT_CATEGORY_ANALYSIS ORDER BY overall_revenue_rank LIMIT 1);
+            LET msg STRING := 'spark bundle ok: product_category_analysis=' || :n || ' top_category=' || :top_cat;
+            CALL SYSTEM$SET_RETURN_VALUE(:msg);
+        END
+  - resource: task
+    name: TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_FINISH
+    user_task_managed_initial_warehouse_size: XSMALL
+    predecessors:
+      - TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_REFRESH_DT
+      - TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_RUN_DBT
+      - TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.T_RUN_SPARK
+    comment: >-
+      TLV DE HOL pipeline end: log row counts ({{dbt_target}}). Serverless.
+      Managed by DCM.
+    definition:
+      type: sql
+      value: |
+        BEGIN
+            LET summary STRING := 'dt_daily=' || (SELECT COUNT(*) FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.DT_DAILY_CATEGORY_REGION)
+                || ' clv=' || (SELECT COUNT(*) FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.CUSTOMER_LIFETIME_VALUE)
+                || ' spark=' || (SELECT COUNT(*) FROM TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.PRODUCT_CATEGORY_ANALYSIS);
+            INSERT INTO TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.PIPELINE_RUN_LOG (RUN_ID, PIPELINE_NAME, STATUS, SUMMARY)
+            SELECT SYSTEM$TASK_RUNTIME_INFO('CURRENT_TASK_GRAPH_RUN_GROUP_ID'), 'tlv_hol_pipeline', 'COMPLETED', :summary;
+            LET msg STRING := 'completed: ' || :summary;
+            CALL SYSTEM$SET_RETURN_VALUE(:msg);
+        END

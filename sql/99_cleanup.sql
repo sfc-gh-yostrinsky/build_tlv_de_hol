@@ -1,39 +1,35 @@
 -- ============================================================================
--- DATA ENGINEERING DEMO - CLEANUP SCRIPT
+-- TLV DE HOL - CLEANUP (Snowflake side). Then run ./aws/teardown.sh.
 -- ============================================================================
--- Removes all demo objects created by scripts 01-05
+-- Order matters:
+--   1. Purge each DCM project: drops every object it manages (DBs, WHs, DT, dbt
+--      project, code bundle, tasks). A project that manages a code bundle can't
+--      be dropped until it has been purged.
+--        cd dcm
+--        snow dcm purge --target PROD
+--        snow dcm purge --target DEV
+--   2. Then run this script.
 -- ============================================================================
 
 USE ROLE ACCOUNTADMIN;
-USE WAREHOUSE COMPUTE_WH;
 
--- ============================================================================
--- DROP DATABASE (removes all schemas, tables, tasks, projects, stages inside)
--- ============================================================================
-DROP DATABASE IF EXISTS TLV_BUILD_HOL;
+-- Created by the Spark bundle, not DCM. Purge drops the databases, so these
+-- normally go with them; listed for clarity.
+DROP ICEBERG TABLE IF EXISTS TLV_BUILD_HOL_DEV.DATA_ENG_DEMO.PRODUCT_CATEGORY_ANALYSIS;
+DROP ICEBERG TABLE IF EXISTS TLV_BUILD_HOL.DATA_ENG_DEMO.PRODUCT_CATEGORY_ANALYSIS;
 
--- ============================================================================
--- DROP ACCOUNT-LEVEL OBJECTS
--- ============================================================================
--- These exist outside the database and must be dropped separately
+DROP DCM PROJECT IF EXISTS DCM_PROJECTS.PROJECTS.TLV_BUILD_HOL_DEV;
+DROP DCM PROJECT IF EXISTS DCM_PROJECTS.PROJECTS.TLV_BUILD_HOL_PROD;
 
--- External Access Integration (created in script 04)
-DROP EXTERNAL ACCESS INTEGRATION IF EXISTS TLV_BUILD_HOL_PYPI_EAI;
+-- Shared raw lake. aws/teardown.sh removes the Glue tables and S3 data either way
+-- (whether dropping a write-enabled CLD also drops its Glue tables is not verified
+-- here). Integration last (identity).
+DROP DATABASE IF EXISTS TLV_HOL_LAKE;
+DROP CATALOG INTEGRATION IF EXISTS TLV_HOL_GLUE_CI;
 
--- Catalog Integration (created in script 01)
-DROP CATALOG INTEGRATION IF EXISTS tlv_iceberg_catalog_int;
+-- Account default set for this HOL (was 1.9.4 before).
+-- ALTER ACCOUNT UNSET DEFAULT_DBT_VERSION;
 
--- External Volume (created in script 01)
-DROP EXTERNAL VOLUME IF EXISTS tlv_datalake_s3_ev;
-
--- Warehouses (created in scripts 02-04)
-DROP WAREHOUSE IF EXISTS TLV_DT_WH;
-DROP WAREHOUSE IF EXISTS TLV_DBT_WH;
-DROP WAREHOUSE IF EXISTS TLV_NOTEBOOK_WH;
-
--- ============================================================================
--- VERIFICATION
--- ============================================================================
-SHOW EXTERNAL VOLUMES LIKE '%tlv%';
-SHOW CATALOG INTEGRATIONS LIKE '%tlv%';
-SHOW EXTERNAL ACCESS INTEGRATIONS LIKE '%tlv%';
+SHOW DATABASES LIKE 'TLV%';
+SHOW WAREHOUSES LIKE 'TLV%';
+SHOW CATALOG INTEGRATIONS LIKE 'TLV%';
