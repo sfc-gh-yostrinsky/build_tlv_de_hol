@@ -26,7 +26,6 @@ templating:
   defaults:
     lake_db: 'TLV_HOL_LAKE'
     lake_schema: 'tlv_hol_raw'
-    pipeline_schedule: '60 MINUTE'
   configurations:
     DEV:
       env_suffix: '_DEV'

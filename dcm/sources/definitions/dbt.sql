@@ -6,6 +6,6 @@
 -- default: ALTER ACCOUNT SET DEFAULT_DBT_VERSION = '2.0.0' (see README).
 
 DEFINE DBT PROJECT TLV_BUILD_HOL{{env_suffix}}.DATA_ENG_DEMO.DBT_ECOMMERCE
-    FROM 'dbt_ecommerce'
+    FROM 'sources/dbt_ecommerce'
     DEFAULT_TARGET = '{{dbt_target}}'
     COMMENT = 'TLV DE HOL customer lifetime value, Iceberg v3 ({{dbt_target}}). Managed by DCM.';

@@ -43,8 +43,9 @@ aws/teardown.sh                   remove the AWS side
 sql/01_glue_catalog_cld.sql       catalog integration, CLD, raw Iceberg v3 tables + seed data
 sql/99_cleanup.sql                Snowflake cleanup (after `snow dcm purge`)
 dcm/manifest.yml                  DEV/PROD targets + templating
-dcm/sources/definitions/          infrastructure, tables, DT, dbt project, code bundle, tasks
-dcm/sources/dbt/dbt_ecommerce/    dbt project (Fusion 2.0.0)
+dcm/sources/definitions/*.sql     infrastructure, tables, DT DAG, dbt project
+dcm/sources/definitions/pipeline.yml  code bundle + task graph (Pipeline Builder; schedule set here)
+dcm/sources/dbt_ecommerce/        dbt project (Fusion 2.0.0; must be under sources/ for CLI deploys)
 dcm/code_bundles/product_analysis/ type:spark bundle: code_bundle.yml, pyproject.toml, .py
 ```
 
