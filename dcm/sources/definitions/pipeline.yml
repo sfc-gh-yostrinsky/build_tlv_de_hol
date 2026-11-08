@@ -115,3 +115,10 @@ definitions:
             LET msg STRING := 'completed: ' || :summary;
             CALL SYSTEM$SET_RETURN_VALUE(:msg);
         END
+  - resource: task
+    name: DCM_PROJECTS.PROJECTS.product_category_analysis_task
+    warehouse: COMPUTE_WH
+    definition:
+      type: code_bundle
+      name: TLV_BUILD_HOL_DEV.DATA_ENG_DEMO.CB_PRODUCT_ANALYSIS
+      entrypoint: product_category_analysis.py
